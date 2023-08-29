@@ -1,0 +1,146 @@
+jwt:
+  auth:
+    converter:
+      resource-id: test-client
+      username-attribute: preferred_username
+      role-prefix: "ROLE_"
+
+
+user-data:
+  headers:
+    id-header-name: "Quiz-User-Id"
+    name-header-name: "Quiz-User-Name"
+    roles-header-name: "Quiz-User-Roles"
+
+logging:
+  level:
+    reactor:
+      netty: TRACE
+    org:
+      springframework:
+
+        cloud:
+          gateway: TRACE
+
+
+services:
+    user-service:
+      uri: http://localhost
+    quiz-generator:
+      uri: http://localhost
+    quiz-director:
+      uri: http://localhost
+    report-service:
+      uri: http://localhost
+    keycloak:
+      uri: http://192.168.64.5:1850/realms/test-realm
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${services.keycloak.uri}
+          jwk-set-uri: ${spring.security.oauth2.resourceserver.jwt.issuer-uri}/protocol/openid-connect/certs
+
+  cloud:
+    gateway:
+      filter:
+        remove-non-proxy-headers:
+          headers:
+            - Authorization
+      httpclient:
+        wiretap: true
+      httpserver:
+        wiretap: true
+      routes:
+        - id: login
+          uri: ${services.user-service.uri}
+          predicates:
+            - Path=/api/v1/login/**
+            - Method=POST
+        - id: signUp
+          uri: ${services.user-service.uri}
+          predicates:
+            - Path=/api/v1/sign-up/**
+            - Method=POST
+        - id: quizSourcesList
+          uri: ${services.quiz-generator.uri}
+          predicates:
+            - Path=/api/v1/quiz/sources
+            - Method=GET
+          filters:
+            - UserDataHeaders
+            - RemoveRequestHeader=Authorization
+        - id: quizSourceInitData
+          uri: ${services.quiz-generator.uri}
+          predicates:
+            - Path=/api/v1/quiz/sources/{id}/init-data
+            - Method=GET
+          filters:
+            - UserDataHeaders
+            - RemoveRequestHeader=Authorization
+        - id: generateQuizQuestions
+          uri: ${services.quiz-generator.uri}
+          predicates:
+            - Path=/api/v1/quiz/sources/{id}/generate
+            - Method=POST
+          filters:
+            - UserDataHeaders
+            - RemoveRequestHeader=Authorization
+        - id: initNewGame
+          uri: ${services.quiz-director.uri}
+          predicates:
+            - Path=/api/v1/quiz/games
+            - Method=POST
+          filters:
+            - UserDataHeaders
+            - RemoveRequestHeader=Authorization
+        - id: getCurrentQuestion
+          uri: ${services.quiz-director.uri}
+          predicates:
+            - Path=/api/v1/quiz/games/current/questions/current
+            - Method=GET
+          filters:
+            - UserDataHeaders
+            - RemoveRequestHeader=Authorization
+        - id: answerToQuestion
+          uri: ${services.quiz-director.uri}
+          predicates:
+            - Path=/api/v1/quiz/games/current/answers
+            - Method=PUT
+          filters:
+            - UserDataHeaders
+            - RemoveRequestHeader=Authorization
+        - id: listGames
+          uri: ${services.quiz-director.uri}
+          predicates:
+            - Path=/api/v1/quiz/games
+            - Method=GET
+          filters:
+            - UserDataHeaders
+            - RemoveRequestHeader=Authorization
+        - id: gameResult
+          uri: ${services.quiz-director.uri}
+          predicates:
+            - Path=/api/v1/quiz/games/{id}/result
+            - Method=GET
+          filters:
+            - UserDataHeaders
+            - RemoveRequestHeader=Authorization
+        - id: gameStatistic
+          uri: ${services.report-service.uri}
+          predicates:
+            - Path=/api/v1/quiz/games/{id}/statistic
+            - Method=GET
+          filters:
+            - UserDataHeaders
+            - RemoveRequestHeader=Authorization
+        - id: ws
+          uri: http://localhost:8081
+          predicates:
+            - Path=/ws/**
+          filters:
+            - Test
+#            - UserDataHeaders
+#            - RemoveRequestHeader=Authorization
